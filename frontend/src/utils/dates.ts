@@ -103,6 +103,24 @@ export function effectiveNextDelivery(store: ThriftStore): string | null {
   return advanceNextDelivery(store.next_delivery, store.delivery_frequency)
 }
 
+function deliveryIntervalDays(store: ThriftStore): number | null {
+  const code = parseFrequencyCode(store.delivery_frequency)
+  switch (code) {
+    case '3d':
+      return 3
+    case '1w':
+      return 7
+    case '2w':
+      return 14
+    case '3w':
+      return 21
+    case '4w':
+      return 28
+    default:
+      return null
+  }
+}
+
 export function daysUntil(iso: string | null): number | null {
   if (!iso) return null
   const target = parseLocalDate(iso)
@@ -117,4 +135,24 @@ export function formatRelativeDeliveryDays(days: number): string {
   if (days === -1) return '1 dzień temu'
   if (days < 0) return `${Math.abs(days)} dni temu`
   return `za ${days} dni`
+}
+
+/**
+ * Relative label for the delivery badge.
+ * Defaults to "days until next delivery", but on the first day after a delivery
+ * it shows "1 dzień temu" so overdue entries are easier to spot.
+ */
+export function deliveryRelativeLabel(store: ThriftStore): string {
+  const nextDelivery = effectiveNextDelivery(store)
+  if (!nextDelivery) return '—'
+
+  const days = daysUntil(nextDelivery)
+  if (days === null) return formatDeliveryDate(nextDelivery)
+
+  const interval = deliveryIntervalDays(store)
+  if (interval !== null && days === interval - 1) {
+    return '1 dzień temu'
+  }
+
+  return formatRelativeDeliveryDays(days)
 }

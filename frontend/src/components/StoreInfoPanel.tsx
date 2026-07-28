@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import type { ThriftStore } from '../api/client'
-import { daysUntil, effectiveNextDelivery, formatDeliveryDate, formatRelativeDeliveryDays } from '../utils/dates'
+import { deliveryRelativeLabel, effectiveNextDelivery, formatDeliveryDate } from '../utils/dates'
 import { formatFrequencyLabel } from '../utils/frequency'
 import { hotnessLabel, hotnessStyles, unverifiedStyles } from '../utils/hotness'
 import { socialLabel, socialLink } from '../utils/social'
@@ -20,12 +20,10 @@ function deliverySummary(store: ThriftStore): string {
   if (!store.delivery_verified) return 'Harmonogram niezweryfikowany'
   const nextDelivery = effectiveNextDelivery(store)
   if (!nextDelivery) return 'Brak ustawionej daty dostawy'
-  const days = daysUntil(nextDelivery)
   const date = formatDeliveryDate(nextDelivery)
   const time = formatTime(store.delivery_time)
   const timePart = time ? ` o ${time}` : ''
-  if (days === null) return `${date}${timePart}`
-  const rel = formatRelativeDeliveryDays(days).toLowerCase()
+  const rel = deliveryRelativeLabel(store).toLowerCase()
   return `${date}${timePart} (${rel})`
 }
 

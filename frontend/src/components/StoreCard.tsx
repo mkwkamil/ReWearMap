@@ -1,5 +1,5 @@
 import type { ThriftStore } from '../api/client'
-import { daysUntil, effectiveNextDelivery, formatDeliveryDate, formatRelativeDeliveryDays } from '../utils/dates'
+import { daysUntil, deliveryRelativeLabel, effectiveNextDelivery, formatDeliveryDate } from '../utils/dates'
 import { formatFrequencyLabel } from '../utils/frequency'
 import { formatDistance } from '../utils/geo'
 import { hotnessLabel, hotnessStyles, unverifiedStyles } from '../utils/hotness'
@@ -24,6 +24,7 @@ function dateCorner(store: ThriftStore) {
       primaryClass: 'text-[color:var(--muted-light)]',
       sub: null as string | null,
       countdown: null as number | null,
+      relativeLabel: null as string | null,
     }
   }
 
@@ -40,6 +41,7 @@ function dateCorner(store: ThriftStore) {
     primaryClass: 'text-[color:var(--ink)]',
     sub: null,
     countdown: days,
+    relativeLabel: deliveryRelativeLabel(store),
   }
 }
 
@@ -94,7 +96,7 @@ export default function StoreCard({
                       : 'text-[color:var(--muted)]'
                   }`}
                 >
-                  {formatRelativeDeliveryDays(corner.countdown)}
+                  {corner.relativeLabel ?? ''}
                 </p>
               )}
               {corner.sub && <p className="text-xs text-[color:var(--muted)]">{corner.sub}</p>}
