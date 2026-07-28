@@ -1,5 +1,5 @@
 import type { ThriftStore } from '../api/client'
-import { daysUntil, formatDeliveryDate } from '../utils/dates'
+import { daysUntil, effectiveNextDelivery, formatDeliveryDate, formatRelativeDeliveryDays } from '../utils/dates'
 import { formatFrequencyLabel } from '../utils/frequency'
 import { formatDistance } from '../utils/geo'
 import { hotnessLabel, hotnessStyles, unverifiedStyles } from '../utils/hotness'
@@ -31,9 +31,12 @@ function dateCorner(store: ThriftStore) {
 
   if (!store.next_delivery) return null
 
-  const days = daysUntil(store.next_delivery)
+  const nextDelivery = effectiveNextDelivery(store)
+  if (!nextDelivery) return null
+
+  const days = daysUntil(nextDelivery)
   return {
-    primary: formatDeliveryDate(store.next_delivery),
+    primary: formatDeliveryDate(nextDelivery),
     primaryClass: 'text-[color:var(--ink)]',
     sub: null,
     countdown: days,
@@ -86,16 +89,12 @@ export default function StoreCard({
               {corner.countdown !== null && (
                 <p
                   className={`text-[11px] font-medium sm:text-xs ${
-                    corner.countdown <= 3 ? 'text-[color:var(--accent)]' : 'text-[color:var(--muted)]'
+                    corner.countdown <= 3 && corner.countdown >= 0
+                      ? 'text-[color:var(--accent)]'
+                      : 'text-[color:var(--muted)]'
                   }`}
                 >
-                  {corner.countdown === 0
-                    ? 'Dziś!'
-                    : corner.countdown === 1
-                      ? 'Jutro'
-                      : corner.countdown < 0
-                        ? `${Math.abs(corner.countdown)} dni temu`
-                        : `za ${corner.countdown} dni`}
+                  {formatRelativeDeliveryDays(corner.countdown)}
                 </p>
               )}
               {corner.sub && <p className="text-xs text-[color:var(--muted)]">{corner.sub}</p>}

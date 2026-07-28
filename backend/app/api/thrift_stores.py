@@ -17,7 +17,11 @@ router = APIRouter(prefix="/thrift-stores", tags=["thrift-stores"])
 async def list_stores(db: AsyncSession = Depends(get_db)) -> list[ThriftStore]:
     # Public read — map/list for visitors. Mutations require admin JWT.
     result = await db.execute(select(ThriftStore).order_by(ThriftStore.name.asc()))
-    return list(result.scalars().all())
+    stores = list(result.scalars().all())
+    changed = any(roll_forward_store(store) for store in stores)
+    if changed:
+        await db.commit()
+    return stores
 
 
 def _finalize_delivery_fields(data: dict) -> dict:

@@ -1,4 +1,5 @@
 import type { ThriftStore } from '../api/client'
+import { hasAutoSchedule, parseFrequencyCode } from './frequency'
 
 /** ISO (yyyy-mm-dd) → dd.mm.rrrr */
 export function formatDeliveryDate(iso: string | null | undefined): string {
@@ -40,13 +41,80 @@ export function deliveryStatusLabel(store: ThriftStore): string {
   if (!store.delivery_enabled) return 'Wyłączone'
   if (!store.delivery_verified) return 'Nie sprawdzony'
   if (!store.next_delivery) return 'Brak daty'
-  return formatDeliveryDate(store.next_delivery)
+  return formatDeliveryDate(effectiveNextDelivery(store))
+}
+
+function parseLocalDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function toIsoDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function startOfToday(): Date {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return today
+}
+
+const FREQUENCY_DAYS: Record<string, number | null> = {
+  '3d': 3,
+  '1w': 7,
+  '2w': 14,
+  '3w': 21,
+  '4w': 28,
+  none: null,
+}
+
+function frequencyDays(frequency: string): number | null {
+  const code = parseFrequencyCode(frequency)
+  return FREQUENCY_DAYS[code] ?? null
+}
+
+/** Advance past delivery dates using the store frequency (mirrors backend logic). */
+export function advanceNextDelivery(
+  iso: string,
+  frequency: string,
+  today: Date = startOfToday(),
+): string {
+  const step = frequencyDays(frequency)
+  if (step === null) return iso
+
+  let current = parseLocalDate(iso)
+  let guard = 0
+  while (current < today && guard < 520) {
+    current = new Date(current)
+    current.setDate(current.getDate() + step)
+    guard += 1
+  }
+  return toIsoDate(current)
+}
+
+/** Next delivery date as it should appear in the UI right now. */
+export function effectiveNextDelivery(store: ThriftStore): string | null {
+  if (!store.next_delivery) return null
+  if (!store.delivery_enabled || !store.delivery_verified) return store.next_delivery
+  if (!hasAutoSchedule(parseFrequencyCode(store.delivery_frequency))) return store.next_delivery
+  return advanceNextDelivery(store.next_delivery, store.delivery_frequency)
 }
 
 export function daysUntil(iso: string | null): number | null {
   if (!iso) return null
-  const target = new Date(iso + 'T00:00:00')
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.ceil((target.getTime() - today.getTime()) / 86400000)
+  const target = parseLocalDate(iso)
+  const today = startOfToday()
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
+}
+
+/** Human-readable relative delivery label in Polish. */
+export function formatRelativeDeliveryDays(days: number): string {
+  if (days === 0) return 'Dziś'
+  if (days === 1) return 'Jutro'
+  if (days === -1) return '1 dzień temu'
+  if (days < 0) return `${Math.abs(days)} dni temu`
+  return `za ${days} dni`
 }

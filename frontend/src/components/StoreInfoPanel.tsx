@@ -1,9 +1,9 @@
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import type { ThriftStore } from '../api/client'
-import { daysUntil, formatDeliveryDate } from '../utils/dates'
+import { daysUntil, effectiveNextDelivery, formatDeliveryDate, formatRelativeDeliveryDays } from '../utils/dates'
 import { formatFrequencyLabel } from '../utils/frequency'
-import { hotnessLabel, hotnessStyles } from '../utils/hotness'
+import { hotnessLabel, hotnessStyles, unverifiedStyles } from '../utils/hotness'
 import { socialLabel, socialLink } from '../utils/social'
 import { formatTime } from '../utils/time'
 
@@ -18,14 +18,14 @@ type Props = {
 function deliverySummary(store: ThriftStore): string {
   if (!store.delivery_enabled) return 'Termin dostawy wyłączony'
   if (!store.delivery_verified) return 'Harmonogram niezweryfikowany'
-  if (!store.next_delivery) return 'Brak ustawionej daty dostawy'
-  const days = daysUntil(store.next_delivery)
-  const date = formatDeliveryDate(store.next_delivery)
+  const nextDelivery = effectiveNextDelivery(store)
+  if (!nextDelivery) return 'Brak ustawionej daty dostawy'
+  const days = daysUntil(nextDelivery)
+  const date = formatDeliveryDate(nextDelivery)
   const time = formatTime(store.delivery_time)
   const timePart = time ? ` o ${time}` : ''
   if (days === null) return `${date}${timePart}`
-  const rel =
-    days === 0 ? 'dziś' : days === 1 ? 'jutro' : days < 0 ? `${Math.abs(days)} dni temu` : `za ${days} dni`
+  const rel = formatRelativeDeliveryDays(days).toLowerCase()
   return `${date}${timePart} (${rel})`
 }
 
@@ -39,7 +39,8 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export default function StoreInfoPanel({ store, isAdmin = false, onClose, onEdit, onNavigate }: Props) {
-  const styles = hotnessStyles(store.hotness)
+  const unverified = !store.delivery_verified
+  const styles = unverified ? unverifiedStyles : hotnessStyles(store.hotness)
   const fb = socialLink('facebook', store.facebook_url)
   const ig = socialLink('instagram', store.instagram_url)
   const note = store.notes?.trim()
@@ -58,11 +59,16 @@ export default function StoreInfoPanel({ store, isAdmin = false, onClose, onEdit
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="truncate text-lg font-semibold text-[color:var(--ink)]">{store.name}</h2>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${styles.badge}`}>
-                  ★ {store.hotness}/10 · {hotnessLabel(store.hotness)}
-                </span>
-              </div>
+              {!unverified && (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${styles.badge}`}>
+                    ★ {store.hotness}/10 · {hotnessLabel(store.hotness)}
+                  </span>
+                </div>
+              )}
+              {unverified && (
+                <p className="mt-1 text-xs text-[color:var(--muted)]">Do weryfikacji</p>
+              )}
             </div>
             <button
               type="button"

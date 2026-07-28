@@ -1,5 +1,5 @@
 import type { ThriftStore } from '../api/client'
-import { daysUntil } from '../utils/dates'
+import { daysUntil, effectiveNextDelivery } from '../utils/dates'
 import { distanceMeters, type LatLng } from '../utils/geo'
 import type { SortMode } from '../utils/warsawDistricts'
 import { storeInDistrict } from '../utils/warsawDistricts'
@@ -27,8 +27,9 @@ function byDistanceAsc(a: ThriftStore, b: ThriftStore, userLocation: LatLng) {
 }
 
 function daysToDelivery(store: ThriftStore): number {
-  if (!store.next_delivery) return Number.POSITIVE_INFINITY
-  const days = daysUntil(store.next_delivery)
+  const next = effectiveNextDelivery(store)
+  if (!next) return Number.POSITIVE_INFINITY
+  const days = daysUntil(next)
   return days === null ? Number.POSITIVE_INFINITY : days
 }
 
@@ -55,7 +56,9 @@ export function filterAndSortStores(
     if (filters.unverifiedOnly && store.delivery_verified) return false
     if (filters.upcomingOnly) {
       if (!store.delivery_enabled || !store.delivery_verified || !store.next_delivery) return false
-      const days = daysUntil(store.next_delivery)
+      const next = effectiveNextDelivery(store)
+      if (!next) return false
+      const days = daysUntil(next)
       if (days === null || days < 0) return false
     }
     return true
