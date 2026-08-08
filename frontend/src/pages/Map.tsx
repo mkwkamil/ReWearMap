@@ -98,7 +98,16 @@ export default function MapPage() {
   )
 
   const handleUserLocation = useCallback((lat: number, lng: number) => {
-    setUserLocation({ lat, lng })
+    setUserLocation((prev) => {
+      if (
+        prev &&
+        Math.abs(prev.lat - lat) < 0.00005 &&
+        Math.abs(prev.lng - lng) < 0.00005
+      ) {
+        return prev
+      }
+      return { lat, lng }
+    })
   }, [])
 
   async function handleSave(payload: {

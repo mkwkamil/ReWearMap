@@ -33,6 +33,10 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
   const watchIdRef = useRef<number | null>(null)
   const onUserLocationRef = useRef(onUserLocation)
   const lastLocateRequestRef = useRef(0)
+  /** Skip auto fitBounds after the user zooms/pans/locates. */
+  const userAdjustedViewRef = useRef(false)
+  /** Track which store set we already fitted to (filter changes reset this). */
+  const fittedStoreKeyRef = useRef<string | null>(null)
 
   const [locating, setLocating] = useState(false)
   const [locateError, setLocateError] = useState<string | null>(null)
@@ -114,6 +118,12 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
     const t2 = window.setTimeout(refreshSize, 250)
     const t3 = window.setTimeout(refreshSize, 500)
 
+    const markUserAdjusted = () => {
+      userAdjustedViewRef.current = true
+    }
+    map.on('zoomstart', markUserAdjusted)
+    map.on('dragstart', markUserAdjusted)
+
     const observer = new ResizeObserver(() => {
       refreshSize()
     })
@@ -128,6 +138,8 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
       window.clearTimeout(t1)
       window.clearTimeout(t2)
       window.clearTimeout(t3)
+      map.off('zoomstart', markUserAdjusted)
+      map.off('dragstart', markUserAdjusted)
       clearWatch()
       map.remove()
       mapRef.current = null
@@ -182,12 +194,27 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
     const map = mapRef.current
     if (!map) return
 
+    const storeKey =
+      stores.length === 0 ? '' : stores.map((s) => s.id).slice().sort().join('|')
+
+    // Only auto-fit when the visible store set actually changes (filters),
+    // not when parent re-renders with a new array reference (e.g. GPS updates).
+    if (fittedStoreKeyRef.current === storeKey) return
+
     map.invalidateSize({ animate: false, pan: false })
 
     if (stores.length === 0) {
-      map.setView(WARSAW, 12)
+      fittedStoreKeyRef.current = storeKey
+      if (!userAdjustedViewRef.current) {
+        map.setView(WARSAW, 12)
+      }
       return
     }
+
+    // After the user zoomed/panned/located, keep their view even if filters change
+    // the store set — still update the key so we don't keep fighting.
+    fittedStoreKeyRef.current = storeKey
+    if (userAdjustedViewRef.current) return
 
     const bounds = L.latLngBounds(stores.map((s) => [s.lat, s.lng] as [number, number]))
     map.fitBounds(bounds.pad(0.15))
@@ -199,8 +226,11 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
     if (!map || !selectedId) return
     const store = stores.find((s) => s.id === selectedId)
     if (!store) return
+    userAdjustedViewRef.current = true
     map.panTo([store.lat, store.lng], { animate: true })
-  }, [selectedId, stores])
+    // Only react to selection changes — not every stores array refresh (e.g. GPS).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [selectedId])
 
   const locateMe = useCallback(() => {
     const map = mapRef.current
@@ -222,6 +252,7 @@ export default function MapView({ stores, selectedId, onSelect, onUserLocation, 
 
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude, longitude, accuracy } = pos.coords
+      userAdjustedViewRef.current = true
       paintUserLocation(latitude, longitude, accuracy)
       map.setView([latitude, longitude], Math.max(map.getZoom(), 14), { animate: true })
       setLocating(false)
